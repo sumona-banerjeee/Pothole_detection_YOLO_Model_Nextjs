@@ -1,5 +1,5 @@
-export function getSeverity(reportCount: number) {
-  if (reportCount >= 10) {
+export function getSeverity(userCount: number) {
+  if (userCount >= 10) {
     return {
       color: "red",
       radius: 20,
@@ -7,7 +7,7 @@ export function getSeverity(reportCount: number) {
     };
   }
 
-  if (reportCount >= 5) {
+  if (userCount >= 5) {
     return {
       color: "orange",
       radius: 15,

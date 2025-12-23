@@ -6,13 +6,11 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import type { DetectionResults } from "@/app/page";
 // import PotholeHeatMap from "./pothole-heatmap";
-import dynamic from "next/dynamic"
+import dynamic from "next/dynamic";
 
-const PotholeHeatMap = dynamic(
-  () => import("./pothole-heatmap"),
-  { ssr: false }
-)
-
+const PotholeHeatMap = dynamic(() => import("./pothole-heatmap"), {
+  ssr: false,
+});
 
 interface PotholeDetectionResultsProps {
   results: DetectionResults;
@@ -436,7 +434,17 @@ export function PotholeDetectionResults({
               </div>
 
               {/* ================= POTHOLE SEVERITY MAP ================= */}
-              <PotholeHeatMap />
+              {/* <PotholeHeatMap /> */}
+              <PotholeHeatMap 
+                lat={22.5726}
+                lng={88.3639}
+                userCount={9} />
+
+              {/* <PotholeHeatMap
+                lat={api.lat}
+                lng={api.lng}
+                userCount={api.user_count}
+              /> */}
             </>
           )}
         </div>
