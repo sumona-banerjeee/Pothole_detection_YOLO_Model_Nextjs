@@ -1,0 +1,2 @@
+Requirement already satisfied: lap in c:\users\sumon\appdata\local\programs\python\python311\lib\site-packages (0.5.12)
+Requirement already satisfied: numpy>=1.21.6 in c:\users\sumon\appdata\local\programs\python\python311\lib\site-packages (from lap) (2.2.6)
