@@ -7,6 +7,8 @@ import { Badge } from "@/components/ui/badge";
 import type { DetectionResults } from "@/app/page";
 // import PotholeHeatMap from "./pothole-heatmap";
 import dynamic from "next/dynamic";
+import { potholeLocations } from "@/app/data/pothole-locations";
+
 
 const PotholeHeatMap = dynamic(() => import("./pothole-heatmap"), {
   ssr: false,
@@ -66,6 +68,7 @@ export function PotholeDetectionResults({
   const [detectionsCount, setDetectionsCount] = useState(0);
   const [logs, setLogs] = useState<DetectionLog[]>([]);
   const [showSummary, setShowSummary] = useState(false);
+  const [showMap, setShowMap] = useState(false);
 
   const frameDetectionMap = useRef<Map<number, any[]>>(new Map());
   const lastProcessedFrame = useRef(-1);
@@ -292,6 +295,7 @@ export function PotholeDetectionResults({
     <div className="glass-card relative z-10">
       {/* Header */}
       <div className="mb-6 flex items-center justify-between">
+        {/* Title */}
         <div>
           <h1 className="text-3xl font-bold gradient-heading mb-2">
             Pothole Detection Results
@@ -300,14 +304,26 @@ export function PotholeDetectionResults({
             Real-time video analysis and detection logs...
           </p>
         </div>
-        <Button
-          onClick={handleBack}
-          variant="outline"
-          className="border-slate-700 text-slate-300 hover:bg-slate-800"
-        >
-          <ArrowLeft className="mr-2 h-4 w-4" />
-          Back
-        </Button>
+
+        {/* Actions */}
+        <div className="flex items-center gap-3">
+          <Button
+            onClick={() => setShowMap(true)}
+            variant="outline"
+            className="bg-blue-950 text-blue-200 border border-blue-800 hover:bg-blue-900 hover:border-blue-700 shadow-md"
+          >
+            Show Map
+          </Button>
+
+          <Button
+            onClick={handleBack}
+            variant="outline"
+            className="bg-blue-950 text-blue-200 border border-blue-800 hover:bg-blue-900 hover:border-blue-700 shadow-md"
+          >
+            <ArrowLeft className="mr-2 h-4 w-4" />
+            Back
+          </Button>
+        </div>
       </div>
 
       {/* Main Content Grid */}
@@ -435,10 +451,7 @@ export function PotholeDetectionResults({
 
               {/* ================= POTHOLE SEVERITY MAP ================= */}
               {/* <PotholeHeatMap /> */}
-              <PotholeHeatMap 
-                lat={22.5726}
-                lng={88.3639}
-                userCount={9} />
+              {/*<PotholeHeatMap lat={22.5726} lng={88.3639} userCount={9} /> */}
 
               {/* <PotholeHeatMap
                 lat={api.lat}
@@ -557,6 +570,45 @@ export function PotholeDetectionResults({
           </div>
         </div>
       </div>
+      {showMap && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm">
+          <div className="relative w-[90vw] h-[85vh] max-w-6xl rounded-2xl border border-slate-700 bg-slate-900 shadow-2xl">
+            {/* Modal Header */}
+            <div className="flex items-center justify-between border-b border-slate-700 px-6 py-4">
+              <h2 className="text-lg font-semibold text-white">
+                Pothole Severity Map
+              </h2>
+
+              <Button
+                onClick={() => setShowMap(false)}
+                variant="ghost"
+                className="text-slate-300 hover:bg-slate-800"
+              >
+                ✕ Close
+              </Button>
+            </div>
+
+            {/* Modal Body */}
+            <div className="h-[calc(100%-64px)] p-4">
+              <PotholeHeatMap locations={potholeLocations} />
+
+
+              
+              {/* <PotholeHeatMap lat={22.5726} lng={88.3639} userCount={9} /> */}
+
+              {/* ================= POTHOLE SEVERITY MAP ================= */}
+              {/* <PotholeHeatMap /> */}
+              {/*<PotholeHeatMap lat={22.5726} lng={88.3639} userCount={9} /> */}
+
+              {/* <PotholeHeatMap
+                lat={api.lat}
+                lng={api.lng}
+                userCount={api.user_count}
+              /> */}
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
