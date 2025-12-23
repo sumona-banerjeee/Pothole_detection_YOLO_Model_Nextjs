@@ -1,48 +1,56 @@
-"use client"
+"use client";
 
-import { useState, useEffect, useRef, useCallback } from "react"
-import { ArrowLeft, CheckCircle2 } from "lucide-react"
-import { Button } from "@/components/ui/button"
-import { Badge } from "@/components/ui/badge"
-import type { DetectionResults } from "@/app/page"
+import { useState, useEffect, useRef, useCallback } from "react";
+import { ArrowLeft, CheckCircle2 } from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { Badge } from "@/components/ui/badge";
+import type { DetectionResults } from "@/app/page";
+// import PotholeHeatMap from "./pothole-heatmap";
+import dynamic from "next/dynamic"
+
+const PotholeHeatMap = dynamic(
+  () => import("./pothole-heatmap"),
+  { ssr: false }
+)
+
 
 interface PotholeDetectionResultsProps {
-  results: DetectionResults
-  videoUrl: string
-  videoId: string
-  onBack: () => void
+  results: DetectionResults;
+  videoUrl: string;
+  videoId: string;
+  onBack: () => void;
 }
 
 interface DetectionLog {
-  frame_id: number
-  pothole_id: number
-  confidence: number
-  timestamp: string
+  frame_id: number;
+  pothole_id: number;
+  confidence: number;
+  timestamp: string;
 }
 
 // Helper function to get confidence color
 const getConfidenceColor = (confidence: number) => {
-  const percent = confidence * 100
+  const percent = confidence * 100;
   if (percent >= 70) {
     return {
       badge: "bg-green-600 hover:bg-green-700",
       progress: "from-green-500 to-green-600",
       text: "text-green-400",
-    }
+    };
   } else if (percent >= 50) {
     return {
       badge: "bg-yellow-600 hover:bg-yellow-700",
       progress: "from-yellow-500 to-yellow-600",
       text: "text-yellow-400",
-    }
+    };
   } else {
     return {
       badge: "bg-red-600 hover:bg-red-700",
       progress: "from-red-500 to-red-600",
       text: "text-red-400",
-    }
+    };
   }
-}
+};
 
 export function PotholeDetectionResults({
   results,
@@ -50,125 +58,127 @@ export function PotholeDetectionResults({
   videoId,
   onBack,
 }: PotholeDetectionResultsProps) {
-  const videoRef = useRef<HTMLVideoElement>(null)
-  const canvasRef = useRef<HTMLCanvasElement>(null)
-  const animationFrameRef = useRef<number | null>(null)
-  const scrollRef = useRef<HTMLDivElement>(null)
+  const videoRef = useRef<HTMLVideoElement>(null);
+  const canvasRef = useRef<HTMLCanvasElement>(null);
+  const animationFrameRef = useRef<number | null>(null);
+  const scrollRef = useRef<HTMLDivElement>(null);
 
-  const [currentFrame, setCurrentFrame] = useState(0)
-  const [currentTime, setCurrentTime] = useState(0)
-  const [detectionsCount, setDetectionsCount] = useState(0)
-  const [logs, setLogs] = useState<DetectionLog[]>([])
-  const [showSummary, setShowSummary] = useState(false)
+  const [currentFrame, setCurrentFrame] = useState(0);
+  const [currentTime, setCurrentTime] = useState(0);
+  const [detectionsCount, setDetectionsCount] = useState(0);
+  const [logs, setLogs] = useState<DetectionLog[]>([]);
+  const [showSummary, setShowSummary] = useState(false);
 
-  const frameDetectionMap = useRef<Map<number, any[]>>(new Map())
-  const lastProcessedFrame = useRef(-1)
-  const logFrameCounter = useRef(0)
+  const frameDetectionMap = useRef<Map<number, any[]>>(new Map());
+  const lastProcessedFrame = useRef(-1);
+  const logFrameCounter = useRef(0);
 
   // ✅ CRITICAL: Prevent lag on replay - cleanup on unmount/back
   useEffect(() => {
     return () => {
       if (animationFrameRef.current) {
-        cancelAnimationFrame(animationFrameRef.current)
+        cancelAnimationFrame(animationFrameRef.current);
       }
-      frameDetectionMap.current.clear()
-      lastProcessedFrame.current = -1
-    }
-  }, [])
+      frameDetectionMap.current.clear();
+      lastProcessedFrame.current = -1;
+    };
+  }, []);
 
   // Build frame detection map (backend frame_id is 1-based)
   useEffect(() => {
-    const map = new Map<number, any[]>()
+    const map = new Map<number, any[]>();
 
     results.frames.forEach((frameData) => {
       if (frameData.potholes && frameData.potholes.length > 0) {
-        map.set(frameData.frame_id, frameData.potholes)
+        map.set(frameData.frame_id, frameData.potholes);
       }
-    })
+    });
 
-    frameDetectionMap.current = map
-    console.log(`Frame map built: ${map.size} frames with detections`)
-  }, [results])
+    frameDetectionMap.current = map;
+    console.log(`Frame map built: ${map.size} frames with detections`);
+  }, [results]);
 
   // Load video
   useEffect(() => {
     if (videoRef.current) {
-      videoRef.current.src = videoUrl
+      videoRef.current.src = videoUrl;
     }
-  }, [videoUrl])
+  }, [videoUrl]);
 
   // Setup canvas resolution using backend video_info
   useEffect(() => {
-    const video = videoRef.current
-    const canvas = canvasRef.current
-    if (!video || !canvas) return
+    const video = videoRef.current;
+    const canvas = canvasRef.current;
+    if (!video || !canvas) return;
 
     const setupResolution = () => {
       // Internal pixel resolution from backend
-      canvas.width = results.video_info.width
-      canvas.height = results.video_info.height
-    }
+      canvas.width = results.video_info.width;
+      canvas.height = results.video_info.height;
+    };
 
-    video.addEventListener("loadedmetadata", setupResolution)
-    window.addEventListener("resize", setupResolution)
+    video.addEventListener("loadedmetadata", setupResolution);
+    window.addEventListener("resize", setupResolution);
 
     return () => {
-      video.removeEventListener("loadedmetadata", setupResolution)
-      window.removeEventListener("resize", setupResolution)
-    }
-  }, [results.video_info.width, results.video_info.height])
+      video.removeEventListener("loadedmetadata", setupResolution);
+      window.removeEventListener("resize", setupResolution);
+    };
+  }, [results.video_info.width, results.video_info.height]);
 
   // ✅ OPTIMIZED RAF LOOP - 80% LESS REDRAWS + THIN LINES + LABELS
   const drawDetections = useCallback(() => {
-    const video = videoRef.current
-    const canvas = canvasRef.current
+    const video = videoRef.current;
+    const canvas = canvasRef.current;
 
     if (!video || !canvas) {
-      animationFrameRef.current = requestAnimationFrame(drawDetections)
-      return
+      animationFrameRef.current = requestAnimationFrame(drawDetections);
+      return;
     }
 
-    const ctx = canvas.getContext("2d", { alpha: true })
+    const ctx = canvas.getContext("2d", { alpha: true });
     if (!ctx) {
-      animationFrameRef.current = requestAnimationFrame(drawDetections)
-      return
+      animationFrameRef.current = requestAnimationFrame(drawDetections);
+      return;
     }
 
     // Compute 1-based frame index to match backend frame_id
-    const zeroBasedFrame = Math.floor(video.currentTime * results.video_info.fps)
-    const frame = zeroBasedFrame + 1
+    const zeroBasedFrame = Math.floor(
+      video.currentTime * results.video_info.fps
+    );
+    const frame = zeroBasedFrame + 1;
 
     // ✅ CRITICAL: Skip redraw if same frame (80% performance gain)
     if (frame === lastProcessedFrame.current) {
-      animationFrameRef.current = requestAnimationFrame(drawDetections)
-      return
+      animationFrameRef.current = requestAnimationFrame(drawDetections);
+      return;
     }
 
     // Don't draw if video is paused or ended
     if (video.paused || video.ended) {
-      animationFrameRef.current = requestAnimationFrame(drawDetections)
-      return
+      animationFrameRef.current = requestAnimationFrame(drawDetections);
+      return;
     }
 
     // Update state only on frame change
-    lastProcessedFrame.current = frame
-    setCurrentFrame(frame)
-    setCurrentTime(video.currentTime)
+    lastProcessedFrame.current = frame;
+    setCurrentFrame(frame);
+    setCurrentTime(video.currentTime);
 
     // Clear canvas once per frame change
-    ctx.clearRect(0, 0, canvas.width, canvas.height)
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
 
-    const detections = frameDetectionMap.current.get(frame)
-    setDetectionsCount(detections?.length || 0)
+    const detections = frameDetectionMap.current.get(frame);
+    setDetectionsCount(detections?.length || 0);
 
     if (detections && detections.length > 0) {
       // ✅ BATCH LOGGING: Only log every 5th frame (max 30 entries)
-      logFrameCounter.current += 1
+      logFrameCounter.current += 1;
       if (logFrameCounter.current % 5 === 0) {
-        const timestamp = new Date().toLocaleTimeString()
+        const timestamp = new Date().toLocaleTimeString();
         const highestConfidenceDetection = detections.reduce((prev, current) =>
           prev.confidence > current.confidence ? prev : current
-        )
+        );
 
         setLogs((prev) => {
           const newLog: DetectionLog = {
@@ -176,107 +186,109 @@ export function PotholeDetectionResults({
             pothole_id: highestConfidenceDetection.pothole_id,
             confidence: highestConfidenceDetection.confidence,
             timestamp,
-          }
-          return [newLog, ...prev.slice(0, 30)]
-        })
+          };
+          return [newLog, ...prev.slice(0, 30)];
+        });
       }
 
       // ULTRA-FAST DRAW: thin lines + labels
       detections.forEach((det) => {
-        const { x1, y1, x2, y2 } = det.bbox
-        const width = x2 - x1
-        const height = y2 - y1
-        const confidencePct = det.confidence * 100
+        const { x1, y1, x2, y2 } = det.bbox;
+        const width = x2 - x1;
+        const height = y2 - y1;
+        const confidencePct = det.confidence * 100;
 
         // Color by confidence
-        let boxColor = "#ef4444" // red default
-        if (confidencePct >= 70) boxColor = "#22c55e"
-        else if (confidencePct >= 50) boxColor = "#eab308"
+        let boxColor = "#ef4444"; // red default
+        if (confidencePct >= 70) boxColor = "#22c55e";
+        else if (confidencePct >= 50) boxColor = "#eab308";
 
         // ✅ THIN BOUNDING BOX (0.75px for ultra-clean look)
-        ctx.strokeStyle = boxColor
-        ctx.lineWidth = 0.75
-        ctx.lineCap = "round"
-        ctx.lineJoin = "round"
-        ctx.strokeRect(x1, y1, width, height)
+        ctx.strokeStyle = boxColor;
+        ctx.lineWidth = 0.75;
+        ctx.lineCap = "round";
+        ctx.lineJoin = "round";
+        ctx.strokeRect(x1, y1, width, height);
 
         // ✅ LIGHT FILL
-        ctx.fillStyle = "rgba(239, 68, 68, 0.1)"
-        ctx.fillRect(x1, y1, width, height)
+        ctx.fillStyle = "rgba(239, 68, 68, 0.1)";
+        ctx.fillRect(x1, y1, width, height);
 
         // ✅ LABEL ABOVE BOX: pothole#id(confidence%)
-        const label = `pothole#${det.pothole_id} (${confidencePct.toFixed(1)}%)`
-        ctx.font = "12px Inter, -apple-system, sans-serif"
-        ctx.textAlign = "left"
-        ctx.textBaseline = "middle"
+        const label = `pothole#${det.pothole_id} (${confidencePct.toFixed(
+          1
+        )}%)`;
+        ctx.font = "12px Inter, -apple-system, sans-serif";
+        ctx.textAlign = "left";
+        ctx.textBaseline = "middle";
 
-        const textWidth = ctx.measureText(label).width
-        const textHeight = 14
-        const padding = 3
+        const textWidth = ctx.measureText(label).width;
+        const textHeight = 14;
+        const padding = 3;
 
         // Label background
-        ctx.fillStyle = "rgba(0,0,0,0.75)"
+        ctx.fillStyle = "rgba(0,0,0,0.75)";
         ctx.fillRect(
           x1,
           y1 - textHeight - padding * 2,
           textWidth + padding * 2,
           textHeight + padding
-        )
+        );
 
         // Label text
-        ctx.fillStyle = "#ffffff"
-        ctx.fillText(label, x1 + padding, y1 - padding - textHeight / 2)
-      })
+        ctx.fillStyle = "#ffffff";
+        ctx.fillText(label, x1 + padding, y1 - padding - textHeight / 2);
+      });
     }
 
-    animationFrameRef.current = requestAnimationFrame(drawDetections)
-  }, [results.video_info.fps])
+    animationFrameRef.current = requestAnimationFrame(drawDetections);
+  }, [results.video_info.fps]);
 
   useEffect(() => {
-    animationFrameRef.current = requestAnimationFrame(drawDetections)
+    animationFrameRef.current = requestAnimationFrame(drawDetections);
     return () => {
       if (animationFrameRef.current) {
-        cancelAnimationFrame(animationFrameRef.current)
+        cancelAnimationFrame(animationFrameRef.current);
       }
-    }
-  }, [drawDetections])
+    };
+  }, [drawDetections]);
 
   // Handle video end
   useEffect(() => {
-    const video = videoRef.current
-    if (!video) return
+    const video = videoRef.current;
+    if (!video) return;
 
     const handleEnded = () => {
-      setShowSummary(true)
-    }
+      setShowSummary(true);
+    };
 
-    video.addEventListener("ended", handleEnded)
+    video.addEventListener("ended", handleEnded);
     return () => {
-      video.removeEventListener("ended", handleEnded)
-    }
-  }, [])
+      video.removeEventListener("ended", handleEnded);
+    };
+  }, []);
 
   // Auto-scroll logs to top (latest logs appear first)
   useEffect(() => {
     if (scrollRef.current && logs.length > 0) {
-      scrollRef.current.scrollTop = 0
+      scrollRef.current.scrollTop = 0;
     }
-  }, [logs])
+  }, [logs]);
 
   // ✅ FIXED onBack - prevents replay lag
   const handleBack = useCallback(() => {
     // Cleanup heavy refs to prevent lag on replay
-    frameDetectionMap.current.clear()
-    lastProcessedFrame.current = -1
-    logFrameCounter.current = 0
-    setLogs([])
-    
+    frameDetectionMap.current.clear();
+    lastProcessedFrame.current = -1;
+    logFrameCounter.current = 0;
+    setLogs([]);
+
     if (animationFrameRef.current) {
-      cancelAnimationFrame(animationFrameRef.current)
+      cancelAnimationFrame(animationFrameRef.current);
     }
-    
-    onBack()
-  }, [onBack])
+
+    onBack();
+  }, [onBack]);
 
   return (
     <div className="glass-card relative z-10">
@@ -306,7 +318,9 @@ export function PotholeDetectionResults({
         <div className="md:col-span-2 space-y-4">
           <div className="rounded-2xl border border-slate-700/70 bg-slate-900/70 backdrop-blur-sm">
             <div className="flex items-center justify-between border-b border-slate-700/70 px-6 py-3">
-              <h2 className="text-lg font-semibold text-white">Video Analysis</h2>
+              <h2 className="text-lg font-semibold text-white">
+                Video Analysis
+              </h2>
               <span className="text-sm text-slate-400">
                 Time: {currentTime.toFixed(1)}s
               </span>
@@ -338,7 +352,9 @@ export function PotholeDetectionResults({
                 <div className="flex gap-4">
                   <div>
                     <span className="text-slate-400">Current Frame: </span>
-                    <span className="font-semibold text-white">{currentFrame}</span>
+                    <span className="font-semibold text-white">
+                      {currentFrame}
+                    </span>
                   </div>
                   <div>
                     <span className="text-slate-400">Detections: </span>
@@ -367,44 +383,61 @@ export function PotholeDetectionResults({
 
           {/* Summary Card */}
           {showSummary && (
-            <div className="rounded-2xl border border-green-500/40 bg-gradient-to-br from-green-900/50 to-emerald-900/40 px-6 py-4 backdrop-blur-sm animate-in fade-in slide-in-from-bottom duration-500">
-              <div className="mb-3 flex items-center gap-2">
-                <CheckCircle2 className="h-5 w-5 text-green-400" />
-                <h3 className="text-lg font-semibold text-white">Analysis Complete</h3>
+            <>
+              {/* ================= SUMMARY CARD ================= */}
+              <div className="rounded-2xl border border-green-500/40 bg-gradient-to-br from-green-900/50 to-emerald-900/40 px-6 py-4 backdrop-blur-sm animate-in fade-in slide-in-from-bottom duration-500">
+                <div className="mb-3 flex items-center gap-2">
+                  <CheckCircle2 className="h-5 w-5 text-green-400" />
+                  <h3 className="text-lg font-semibold text-white">
+                    Analysis Complete
+                  </h3>
+                </div>
+
+                <div className="grid grid-cols-2 gap-4 text-sm text-slate-200">
+                  <div className="flex justify-between">
+                    <span className="text-slate-300">Total Frames:</span>
+                    <span className="font-semibold text-white">
+                      {results.summary.total_frames}
+                    </span>
+                  </div>
+
+                  <div className="flex justify-between">
+                    <span className="text-slate-300">Unique Potholes:</span>
+                    <span className="font-semibold text-white">
+                      {results.summary.unique_potholes}
+                    </span>
+                  </div>
+
+                  <div className="flex justify-between">
+                    <span className="text-slate-300">Total Detections:</span>
+                    <span className="font-semibold text-white">
+                      {results.summary.total_detections}
+                    </span>
+                  </div>
+
+                  <div className="flex justify-between">
+                    <span className="text-slate-300">
+                      Frames with Detections:
+                    </span>
+                    <span className="font-semibold text-white">
+                      {results.summary.frames_with_detections}
+                    </span>
+                  </div>
+
+                  <div className="col-span-2 mt-2 flex items-center justify-between border-t border-slate-600 pt-3">
+                    <span className="text-slate-300 font-medium">
+                      Detection Rate:
+                    </span>
+                    <Badge className="bg-green-600 text-white text-sm px-3 py-1">
+                      {results.summary.detection_rate.toFixed(1)}%
+                    </Badge>
+                  </div>
+                </div>
               </div>
-              <div className="grid grid-cols-2 gap-4 text-sm text-slate-200">
-                <div className="flex justify-between">
-                  <span className="text-slate-300">Total Frames:</span>
-                  <span className="font-semibold text-white">
-                    {results.summary.total_frames}
-                  </span>
-                </div>
-                <div className="flex justify-between">
-                  <span className="text-slate-300">Unique Potholes:</span>
-                  <span className="font-semibold text-white">
-                    {results.summary.unique_potholes}
-                  </span>
-                </div>
-                <div className="flex justify-between">
-                  <span className="text-slate-300">Total Detections:</span>
-                  <span className="font-semibold text-white">
-                    {results.summary.total_detections}
-                  </span>
-                </div>
-                <div className="flex justify-between">
-                  <span className="text-slate-300">Frames with Detections:</span>
-                  <span className="font-semibold text-white">
-                    {results.summary.frames_with_detections}
-                  </span>
-                </div>
-                <div className="col-span-2 mt-2 flex items-center justify-between border-t border-slate-600 pt-3">
-                  <span className="text-slate-300 font-medium">Detection Rate:</span>
-                  <Badge className="bg-green-600 text-white text-sm px-3 py-1">
-                    {results.summary.detection_rate.toFixed(1)}%
-                  </Badge>
-                </div>
-              </div>
-            </div>
+
+              {/* ================= POTHOLE SEVERITY MAP ================= */}
+              <PotholeHeatMap />
+            </>
           )}
         </div>
 
@@ -412,7 +445,9 @@ export function PotholeDetectionResults({
         <div className="flex flex-col rounded-2xl border border-slate-700/70 bg-slate-900/70 backdrop-blur-sm overflow-hidden">
           <div className="border-b border-slate-700/70 px-6 py-3 flex items-center justify-between">
             <h2 className="text-lg font-semibold text-white">Detection Logs</h2>
-            <span className="text-xs text-slate-400">Live Updates (30 max)</span>
+            <span className="text-xs text-slate-400">
+              Live Updates (30 max)
+            </span>
           </div>
 
           <div
@@ -448,11 +483,13 @@ export function PotholeDetectionResults({
                     </svg>
                   </div>
                 </div>
-                <p className="text-sm">Play the video to see detection logs...</p>
+                <p className="text-sm">
+                  Play the video to see detection logs...
+                </p>
               </div>
             ) : (
               logs.map((log, index) => {
-                const colors = getConfidenceColor(log.confidence)
+                const colors = getConfidenceColor(log.confidence);
                 return (
                   <div
                     key={`${log.frame_id}-${log.pothole_id}-${index}`}
@@ -506,12 +543,12 @@ export function PotholeDetectionResults({
                       </div>
                     </div>
                   </div>
-                )
+                );
               })
             )}
           </div>
         </div>
       </div>
     </div>
-  )
+  );
 }
